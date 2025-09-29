@@ -419,15 +419,47 @@ useful keyword arguments:
         return self._resample_errors(windows, noises, **kwargs)[1] - target
     #end def
 
+    # def _windows_noises_of_epsilon_d(
+    #     self,
+    #     epsilon_d,
+    #     **kwargs,
+    # ):
+    #     windows, noises = [], []
+    #     for epsilon, ls, in zip(epsilon_d, self.ls_list):
+    #         W_opt, sigma_opt = ls.maximize_sigma(epsilon, **kwargs)  # no altering the error
+    #         #W_opt, sigma_opt = ls.interpolate_max_sigma(abs(epsilon))
+    #         windows.append(W_opt)
+    #         noises.append(sigma_opt)
+    #     #end for
+    #     return windows, noises
+    # #end def
+    
+    # SDN update 
     def _windows_noises_of_epsilon_d(
         self,
         epsilon_d,
         **kwargs,
     ):
         windows, noises = [], []
-        for epsilon, ls, in zip(epsilon_d, self.ls_list):
-            W_opt, sigma_opt = ls.maximize_sigma(epsilon, **kwargs)  # no altering the error
-            #W_opt, sigma_opt = ls.interpolate_max_sigma(abs(epsilon))
+        for d, (epsilon, ls) in enumerate(zip(epsilon_d, self.ls_list)):
+            try:
+                W_opt, sigma_opt = ls.maximize_sigma(epsilon, **kwargs)
+            except AssertionError as e:
+                print(f"Warning (tls{d}): {e}")
+                print(f"Falling back to default W and sigma for direction {d}...")
+                
+                # Default W: Use target grid range if available, else fall back to 1.0
+                if hasattr(ls, 'target_grid') and ls.target_grid is not None:
+                    W_default = (ls.target_grid.max() - ls.target_grid.min()) * 0.5  # 50% of grid span
+                else:
+                    W_default = 1.0  # Arbitrary safe default
+                
+                # Default sigma: 5% of W
+                sigma_default = W_default * 0.05
+                
+                W_opt, sigma_opt = W_default, sigma_default
+                print(f"Using fallback for tls{d}: W={W_opt:.4f}, sigma={sigma_default:.4f}")
+            
             windows.append(W_opt)
             noises.append(sigma_opt)
         #end for

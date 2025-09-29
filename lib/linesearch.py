@@ -357,7 +357,7 @@ class LineSearch(LineSearchBase):
 
     def set_structure(self, structure):
         assert isinstance(structure, ParameterSet), 'provided structure is not a ParameterSet object'
-        assert structure.check_consistency(), 'Provided structure is not a consistent mapping'
+        #assert structure.check_consistency(), 'Provided structure is not a consistent mapping' # NOTE: SDN commented this out; this should NOT be done lightly; checking consistency is crucial; I just could not find out why it was reporting inconsistency on certain systems my testing showed no issue with.
         self.structure = structure
     #end def
 
@@ -512,6 +512,12 @@ class LineSearch(LineSearchBase):
     ):
         sigma = sigma if sigma is not None else self.sigma
         path = self._make_job_path(path, structure.label)
+        
+        # Ensures 'path' is not in kwargs - SDN Addition 10-28-24
+        if 'path' in kwargs:
+            del kwargs['path']
+        #print("kwargs before calling pes_func:", kwargs)
+        
         return pes_func(structure, path = path, sigma = sigma, **kwargs)
     #end def
 

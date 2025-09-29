@@ -113,7 +113,7 @@ def bipolynomials(X, Y, nx, ny):
 def bipolyfit(X, Y, Z, nx, ny):
     """Fit to a bipolynomial set of variables"""
     XYp = bipolynomials(X, Y, nx, ny)
-    p, r, rank, s = linalg.lstsq(array(XYp).T, Z.flatten(), rcond = None)
+    p, r, rank, s = linalg.lstsq(array(XYp).T.astype('float'), Z.flatten().astype('float'), rcond = None) #@SDN Added astype('float') to resolve error!
     return p
 #end def bipolyfit
 

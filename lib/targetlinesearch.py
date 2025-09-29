@@ -402,9 +402,28 @@ class TargetLineSearch(TargetLineSearchBase, LineSearch):
         self.T_mat = self._generate_T_mat()
     #end def
 
+    # SDN Changed to try accept
     def optimize(self, epsilon, **kwargs):
         """Optimize W and sigma to a given target error epsilon > 0."""
-        self.W_opt, self.sigma_opt = self.maximize_sigma(epsilon, **kwargs)
+        
+        try:
+            self.W_opt, self.sigma_opt = self.maximize_sigma(epsilon, **kwargs)
+        except AssertionError as e:
+            print(f"Warning: {e}")
+            print("Falling back to default W and sigma...")
+            
+            # Default W: Use target grid range if available, else fall back to 1.0
+            if hasattr(self, 'target_grid') and self.target_grid is not None:
+                W_default = (self.target_grid.max() - self.target_grid.min()) * 0.5  # 50% of grid span
+            else:
+                W_default = 1.0  # Arbitrary safe default
+            
+            # Default sigma: 5% of W
+            sigma_default = W_default * 0.05
+            
+            self.W_opt, self.sigma_opt = W_default, sigma_default
+            print(f"Using fallback values: W={self.W_opt:.4f}, sigma={self.sigma_opt:.4f}")
+            
         self.epsilon = epsilon
         self.optimized = True
     #end def

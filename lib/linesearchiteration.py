@@ -23,6 +23,7 @@ def load_from_disk(path):
         #end with
         return data
     except FileNotFoundError:
+        print("File not found.")
         return None
     #end try
 #end def

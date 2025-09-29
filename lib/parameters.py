@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''Methods and class definitions regarding physical/abstract parametric mappings'''
 
-from numpy import linalg, pi, arccos, array, dot, isscalar, diag, random, loadtxt
+from numpy import linalg, pi, arccos, array, dot, isscalar, diag, random, loadtxt, clip #SDN added clip for bond_angle
 from scipy.optimize import minimize
 from copy import deepcopy
 
@@ -24,6 +24,7 @@ def bond_angle(r0, rc, r1, units = 'ang'):
     v1 = r0 - rc
     v2 = r1 - rc
     cosang = dot(v1, v2) / linalg.norm(v1) / linalg.norm(v2)
+    cosang = clip(cosang, -1, 1) #SDN change
     ang = arccos(cosang) * 180 / pi if units == 'ang' else arccos(cosang)
     return ang
 #end def

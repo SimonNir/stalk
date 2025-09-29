@@ -7,6 +7,7 @@ from os import makedirs
 from os.path import exists
 from surrogate_classes import bipolyfit
 from lib.parameters import load_xyz, directorize
+from lib.util import get_color
 
 __author__ = "Juha Tiihonen"
 __email__ = "tiihonen@iki.fi"
@@ -356,19 +357,44 @@ def nexus_gamess_analyzer(path, suffix = 'gamess.inp', allow_fail = True, **kwar
 
 def nexus_qmcpack_analyzer(path, qmc_idx = 1, get_var = False, suffix = '/dmc/dmc.in.xml', **kwargs):
     from nexus import QmcpackAnalyzer
+    
+    print(f"Calling QmcpackAnalyzer on {directorize(path)}{suffix}")
     ai = QmcpackAnalyzer('{}{}'.format(directorize(path), suffix))
     ai.analyze()
-    LE = ai.qmc[qmc_idx].scalars.LocalEnergy
-    LE2 = ai.qmc[qmc_idx].scalars.LocalEnergy_sq
-    E     = LE.mean
-    Err   = LE.error
-    V     = LE2.mean - E**2
-    kappa = LE.kappa
-    if get_var:
-        return E, Err, V, kappa
-    else:
-        return E, Err
-    #end if
+    print("ai.analyze() called successfully")
+    
+    if "vmc" in suffix:
+        print("recognized vmc suffix: defaulting to qmc_idx=0")
+        qmc_idx=0
+    
+    try: 
+        LE = ai.qmc[qmc_idx].scalars.LocalEnergy
+        LE2 = ai.qmc[qmc_idx].scalars.LocalEnergy_sq
+        E     = LE.mean
+        Err   = LE.error
+        V     = LE2.mean - E**2
+        kappa = LE.kappa
+        print("data retrieved")
+        if get_var:
+            return E, Err, V, kappa
+        else:
+            return E, Err
+        #end if
+        
+    except KeyError:
+        print(f"Tried to access index {qmc_idx}. Path: {path}{suffix}. But was unable. Defaulting to index 0"
+        )
+        LE = ai.qmc[0].scalars.LocalEnergy
+        LE2 = ai.qmc[0].scalars.LocalEnergy_sq
+        E     = LE.mean
+        Err   = LE.error
+        V     = LE2.mean - E**2
+        kappa = LE.kappa
+        if get_var:
+            return E, Err, V, kappa
+        else:
+            return E, Err
+        #end if
 #end def
 
 
@@ -394,31 +420,121 @@ def generate_surrogate(
 
 
 from matplotlib import pyplot as plt
+# def plot_surrogate_pes(
+#     surrogate,  # surrogate object
+#     overlay = True,
+#     **kwargs,
+# ):
+#     if overlay:
+#         f, ax = plt.subplots(tight_layout = True)
+#         ax.set_title('PES: every line-search')
+#     #end if
+#     for l, ls in enumerate(surrogate.ls_list):
+#         if not overlay:
+#             f, ax = plt.subplots(tight_layout = True)
+#             ax.set_title('PES: Line-search #{}'.format(l))
+#         #end if
+#         label = 'ls #{}'.format(l)
+#         plot_one_surrogate_pes(ls, ax = ax, color = get_color(l),**kwargs)  # TODO: make this class method
+#         if not overlay:
+#             ax.legend(fontsize = 10)
+#         #end if
+#     #end for
+#     if overlay:
+#         ax.legend(fontsize = 10)
+#     #end if
+# #end def
+
 def plot_surrogate_pes(
     surrogate,  # surrogate object
-    overlay = True,
+    overlay=True,
+    show_direction_components=True,  # New parameter to control direction display
+    ylims=None, #[-26.28, -26.1], # New parameter to limit x and y scale to stay zoomed
+    xlims=None, #[-1.2, 1.2],
     **kwargs,
 ):
     if overlay:
-        f, ax = plt.subplots(tight_layout = True)
+        f = plt.figure(figsize=(10, 7))  # Slightly reduced height
+        # Adjust axes to use more vertical space (reduced bottom margin)
+        ax = f.add_axes([0.1, 0.35, 0.85, 0.6])  # [left, bottom, width, height]
         ax.set_title('PES: every line-search')
     #end if
+    
     for l, ls in enumerate(surrogate.ls_list):
         if not overlay:
-            f, ax = plt.subplots(tight_layout = True)
+            f, ax = plt.subplots(figsize=(8, 6.3), tight_layout=True)
             ax.set_title('PES: Line-search #{}'.format(l))
         #end if
-        label = 'ls #{}'.format(l)
-        plot_one_surrogate_pes(ls, ax = ax, color = get_color(l), **kwargs)  # TODO: make this class method
+        
+        # Create an informative label for the direction
+        if show_direction_components:
+            # Get the eigenvector for this direction
+            direction = surrogate.get_directions(l)
+            eigenvalue = surrogate.hessian.Lambda[l]
+            
+            # Format the label with direction number and eigenvalue
+            label = f"dir{l} (λ={eigenvalue:.3g})"
+            
+            # Optionally add the top components if desired
+            # Find the indices of the largest components (absolute value)
+            if len(direction) <= 4:  # If few parameters, show all
+                components = list(enumerate(direction))
+            else:  # Otherwise show top 3
+                components = sorted(enumerate(direction), key=lambda x: abs(x[1]), reverse=True)[:3]
+            
+            # Add component info to label
+            comp_str = ", ".join([f"p{i}={v:.3g}" for i, v in components])
+            label += f": {comp_str}"
+        else:
+            label = f"dir{l}"
+        
+        plot_one_surrogate_pes(ls, ax=ax, color=get_color(l), label=label, **kwargs)
+        
         if not overlay:
-            ax.legend(fontsize = 10)
+            ax.legend(fontsize=6, loc='best')
         #end if
     #end for
+    
     if overlay:
-        ax.legend(fontsize = 10)
-    #end if
-#end def
+        # Move the legend closer to the plot (reduced y-offset)
+        f.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, 0.25), ncol=3, framealpha=0.7)
 
+        # Improve axes formatting
+        ax.grid(alpha=0.3, linestyle='--')
+        ax.set_xlabel('Displacement along search direction', fontsize=11)
+        ax.set_ylabel('Energy difference (Ha)', fontsize=11)
+    #end if
+    
+    if ylims is not None:
+        ax.set_ylim(ylims[0], ylims[1])
+    if xlims is not None:
+        ax.set_xlim(xlims[0], xlims[1])
+        
+
+
+# def plot_one_surrogate_pes(
+#     tls,
+#     ax,
+#     marker = '.',
+#     color = 'k',
+#     label = '',
+#     **kwargs
+# ):
+#     Lambda = tls.Lambda
+#     grid = tls.target_grid
+#     values = tls.target_values
+#     # TODO: diagnose numerically
+#     if ax is not None:
+#         xgrid = linspace(grid.min(), grid.max(), 201)
+#         ygrid = tls.target_in(xgrid)
+#         ax.plot(xgrid, tls.target_y0 + 0.5*Lambda*xgrid**2, color = color, linestyle = ':', label = '')
+#         ax.plot(xgrid, ygrid, marker = 'None', color = color, label = '')
+#         ax.plot(grid, values, marker = marker, color = color, linestyle = 'None', label = '{} data'.format(label))
+        
+#         ax.set_xlabel('Displacement', fontsize = 10)  # TODO: units
+#         ax.set_ylabel('Energy difference', fontsize = 10)  # TODO: units
+#     #end if
+# #end def
 
 def plot_one_surrogate_pes(
     tls,
@@ -431,18 +547,27 @@ def plot_one_surrogate_pes(
     Lambda = tls.Lambda
     grid = tls.target_grid
     values = tls.target_values
-    # TODO: diagnose numerically
+    
     if ax is not None:
         xgrid = linspace(grid.min(), grid.max(), 201)
         ygrid = tls.target_in(xgrid)
-        ax.plot(xgrid, tls.target_y0 + 0.5*Lambda*xgrid**2, color = color, linestyle = ':', label = '')
-        ax.plot(xgrid, ygrid, marker = 'None', color = color, label = '')
-        ax.plot(grid, values, marker = marker, color = color, linestyle = 'None', label = '{} data'.format(label))
         
-        ax.set_xlabel('Displacement', fontsize = 10)  # TODO: units
-        ax.set_ylabel('Energy difference', fontsize = 10)  # TODO: units
+        # Plot the harmonic approximation (dotted line)
+        ax.plot(xgrid, tls.target_y0 + 0.5*Lambda*xgrid**2, color=color, 
+                linestyle=':', alpha=0.7, label='')
+        
+        # Plot the interpolated line (solid line)
+        ax.plot(xgrid, ygrid, marker='None', color=color, 
+                linestyle='-', linewidth=2, label='')
+        
+        # Plot the actual data points
+        ax.plot(grid, values, marker=marker, color=color, markersize=6,
+                linestyle='None', label=label)
+        
+        # Improve axis labels
+        ax.set_xlabel('Displacement', fontsize=10)
+        ax.set_ylabel('Energy difference', fontsize=10)
     #end if
-#end def
 
 
 def plot_surrogate_bias(
@@ -613,9 +738,24 @@ def get_var_eff(
     **kwargs
 ):
     from nexus import run_project
-    run_project(job_func(structure.copy(), path, sigma = None))
-    E, Err = nexus_qmcpack_analyzer(path, suffix = suffix, equilibration = 10, **analyzer_args)
-    var_eff = default_steps * Err**2
+    
+    # print(dir(job_func)) # will show what all the attributes of jobfunc are 
+    # print(job_func.sigma)
+    #POSSIBLE SOLUTION run_project(job_func(structure.copy(), path, sigma=job_func.sigma)
+    # the confusing part is why this is only happening now - possibly worth it to ask Juha
+    
+    #print("Attributes of job_func:", dir(job_func))  # Debugging statement - see python overloading troubleshooting.ipbny on simon PC - 
+    # SDN 9/10 this attempts to dir / get sigma partial and not the inner function; if you want the inner function sigma you need to find a diff way via partial.func or something
+    
+    #print("Job function sigma:", getattr(job_func, 'sigma', 'Attribute not found'))  # Debugging statement
+    
+    #if 'sigma' in kwargs: # second update 8/27/24 from SDN; sigma should only be being defined in job_func itself so shouldn't be in kwargs
+    #    del kwargs['sigma']
+    
+    run_project(job_func(structure.copy(), path, sigma = None)) #changed sigma=None to job_func.sigma to see if works 9/10/24 - 
+    # edit: it did not - perhaps because you aren't actually directly calling sigma but are acting on partial, not dmc_pes_job
+    E, Err = nexus_qmcpack_analyzer(path, suffix = suffix, equilibration = 10, **analyzer_args) # SDN 12-27-24 Could this be where it is breaking? 
+    var_eff = default_steps * Err**2 # in the updated STALK docs, they use a different class called EffectiveVariance
     return var_eff
 #end def
 
