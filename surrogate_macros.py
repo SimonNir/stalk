@@ -454,9 +454,9 @@ def plot_surrogate_pes(
     **kwargs,
 ):
     if overlay:
-        f = plt.figure(figsize=(10, 7))  # Slightly reduced height
+        f = plt.figure(figsize=(9, 7*9/10))  # Slightly reduced height
         # Adjust axes to use more vertical space (reduced bottom margin)
-        ax = f.add_axes([0.1, 0.35, 0.85, 0.6])  # [left, bottom, width, height]
+        ax = f.add_axes([0.1, 0.25, 0.85, 0.7])  # [left, bottom, width, height]
         ax.set_title('PES: every line-search')
     #end if
     
@@ -497,7 +497,7 @@ def plot_surrogate_pes(
     
     if overlay:
         # Move the legend closer to the plot (reduced y-offset)
-        f.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, 0.25), ncol=3, framealpha=0.7)
+        f.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, 0.17), ncol=2, framealpha=0.7)
 
         # Improve axes formatting
         ax.grid(alpha=0.3, linestyle='--')
