@@ -5,6 +5,7 @@ This is the surrogate model used to inform and optimize a parallel line-search.
 '''
 
 from numpy import array, mean, linspace, argmin, where, isnan, nanmax, ceil
+import numpy as np
 from functools import partial
 from scipy.optimize import broyden1
 
@@ -163,13 +164,26 @@ useful keyword arguments:
         #end if
         # start with a guess mixture of propagated bias and noise
         U = self.get_directions()
+
+        n_params = U.shape[0]
+        assert len(epsilon_p) == n_params, f"epsilon_p length ({len(epsilon_p)}) must match number of parameters ({n_params})"
+
         if kind == 'thermal':
             epsilon_p = array(epsilon_p, dtype = float)
             epsilon_d_opt = self._optimize_epsilon_p_thermal(epsilon_p, verbose = verbose, **kwargs)
         else:
             assert not any([e is None for e in epsilon_p]), 'Must specify all epsilon_p for the {:s} method'.format(kind)
             epsilon_p = array(epsilon_p, dtype = float)
-            epsilon_d0 = mix * abs(U @ epsilon_p) + (1 - mix) * U.T @ U @ epsilon_p
+            # Initialize epsilon_d0 in the active direction space
+            if U.shape[1] < n_params:  # Reduced subspace after masking
+                # Project epsilon_p onto active directions; use pseudo-inverse for mapping back
+                U_pinv = np.linalg.pinv(U)  # Shape: (n_directions, n_params)
+                epsilon_d0 = abs(U_pinv @ epsilon_p) * mix + abs(U.T @ epsilon_p) * (1 - mix)
+            else:
+                # Full space: original transformation
+                epsilon_d0 = mix * abs(U @ epsilon_p) + (1 - mix) * U.T @ U @ epsilon_p
+            #end if 
+
             if kind == 'ls':
                 epsilon_d_opt = self._optimize_epsilon_p_ls(epsilon_p, epsilon_d0, verbose = verbose, **kwargs)
             elif kind == 'broyden1':
@@ -342,9 +356,13 @@ useful keyword arguments:
         return [(temperature / abs(Lambda))**0.5 for Lambda in self.Lambdas]
     #end def
 
+    # def _get_thermal_epsilon(self, temperature):
+    #     return [(temperature / abs(Lambda))**0.5 for Lambda in self.hessian.diagonal]
+    # #end def
+    # robust with masked hessian
     def _get_thermal_epsilon(self, temperature):
-        return [(temperature / abs(Lambda))**0.5 for Lambda in self.hessian.diagonal]
-    #end def
+        return [(temperature / abs(Lambda))**0.5 for Lambda in self.Lambdas]
+    # end def
 
     # override to set targets instead of results
     def load_results(self, set_target = True, **kwargs):
@@ -398,10 +416,19 @@ useful keyword arguments:
             x0s_d.append(x0s)
             errorbar_d.append(get_fraction_error(x0s - bias_d, self.fraction)[1])
         #end for
-        # parameter errorbars
+        U = self.get_directions()  # Shape: (n_params, n_directions)
+        
+        # # parameter errorbars
+        # for x0 in array(x0s_d).T:
+        #     x0s_p.append(self._calculate_params_next(-biases_p, self.directions, x0))  # TODO: could this be vectorized?
+        # #end for
+
+        # new version to handle reduced subspace after masking
         for x0 in array(x0s_d).T:
-            x0s_p.append(self._calculate_params_next(-biases_p, self.directions, x0))  # TODO: could this be vectorized?
-        #end for
+        # Project direction-space displacements to parameter space
+            delta_p = self._calculate_params_next(np.zeros(U.shape[0]), U, x0) - np.zeros(U.shape[0])
+            x0s_p.append(delta_p)
+
         errorbar_p = [get_fraction_error(x0s, self.fraction)[1] for x0s in array(x0s_p).T]
         return array(errorbar_d), array(errorbar_p)
     #end def
