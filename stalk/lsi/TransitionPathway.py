@@ -32,7 +32,6 @@ class TransitionPathway():
         
         self._images = []
 
-        # Determine highest-energy image
         # Determine highest-energy image, allowing None for endpoints only
         energies = []
         for i, img in enumerate(self._all_images):
