@@ -18,7 +18,7 @@ basedir = 'neb'
 makedirs(basedir, exist_ok=True)
 
 # number of intermediate images
-n_images = 3
+n_images = 98
 
 traj_init = interpolate_params(structure_a, structure_b, n_images)
 # Or, to be safer (against discontinuities, etc) but possibly less accurate, interpolate in cartesian

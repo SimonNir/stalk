@@ -1,18 +1,18 @@
 ## SLURM PROLOG ###############################################################
-##    Job ID : 12348232
+##    Job ID : 12348540
 ##  Job Name : stalk_pca
-##  Nodelist : node1934
+##  Nodelist : node2405
 ##      CPUs : 32
 ##   Mem/CPU : 2800 MB
 ## Directory : /oscar/home/snirenbe/stalk_pca/examples/nexus/sn2_pca
-##   Job Started : Sun Aug 17 12:17:23 PM EDT 2025
+##   Job Started : Sun Aug 17 02:49:51 PM EDT 2025
 ###############################################################################
 
 The following have been reloaded with a version change:
   1) python/3.9.16s-x3wdtvt => python/3.11.0s-ixrhc3q
 
 Traceback (most recent call last):
-  File "/users/snirenbe/stalk_pca/stalk/lsi/PathwayImage.py", line 136, in calculate_hessian
+  File "/users/snirenbe/stalk_pca/stalk/lsi/PathwayImage.py", line 145, in calculate_hessian
     hessian_array = loadtxt(hessian_file, ndmin=2)
                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/users/snirenbe/stalk_venv/lib64/python3.11/site-packages/numpy/lib/_npyio_impl.py", line 1397, in loadtxt
@@ -26,7 +26,7 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/users/snirenbe/stalk_venv/lib64/python3.11/site-packages/numpy/lib/_datasource.py", line 529, in open
     raise FileNotFoundError(f"{path} not found.")
-FileNotFoundError: tpw/image_0/hessian//hessian.dat not found.
+FileNotFoundError: tpw/image_1/hessian//hessian.dat not found.
 
 During handling of the above exception, another exception occurred:
 
@@ -35,44 +35,28 @@ Traceback (most recent call last):
     tpw.calculate_hessians(pes=pes_pyscf)
   File "/users/snirenbe/stalk_pca/stalk/lsi/TransitionPathway.py", line 195, in calculate_hessians
     image.calculate_hessian(
-  File "/users/snirenbe/stalk_pca/stalk/lsi/PathwayImage.py", line 140, in calculate_hessian
+  File "/users/snirenbe/stalk_pca/stalk/lsi/PathwayImage.py", line 148, in calculate_hessian
     hessian.compute_fdiff(
   File "/users/snirenbe/stalk_pca/stalk/params/ParameterHessian.py", line 146, in compute_fdiff
     pes.evaluate_all(structure_list, **kwargs)
-  File "/users/snirenbe/stalk_pca/stalk/nexus/NexusPes.py", line 128, in evaluate_all
-    self._load_structure(structure, add_sigma=add_sigma, warn_limit=warn_limit)
-  File "/users/snirenbe/stalk_pca/stalk/nexus/NexusPes.py", line 167, in _load_structure
-    result = self.loader.load(structure)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/users/snirenbe/stalk_pca/stalk/io/PesLoader.py", line 16, in load
-    res = self._load(structure, **args)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/users/snirenbe/stalk_pca/stalk/io/FilesLoader.py", line 21, in _load
-    value, error = loadtxt('{}/{}'.format(path, suffix))
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/users/snirenbe/stalk_venv/lib64/python3.11/site-packages/numpy/lib/_npyio_impl.py", line 1397, in loadtxt
-    arr = _read(fname, dtype=dtype, comment=comment, delimiter=delimiter,
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/users/snirenbe/stalk_venv/lib64/python3.11/site-packages/numpy/lib/_npyio_impl.py", line 1024, in _read
-    fh = np.lib._datasource.open(fname, 'rt', encoding=encoding)
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/users/snirenbe/stalk_venv/lib64/python3.11/site-packages/numpy/lib/_datasource.py", line 192, in open
-    return ds.open(path, mode, encoding=encoding, newline=newline)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/users/snirenbe/stalk_venv/lib64/python3.11/site-packages/numpy/lib/_datasource.py", line 529, in open
-    raise FileNotFoundError(f"{path} not found.")
-FileNotFoundError: NexusStructure (eqm)
-  params:
-    p0            0.4658 
-    p1            0.1396 
-    p2            0.0079 
-    p3           -0.0003 
-  consistent: yes
-  pos (6 atoms)
-    C     0.3791    0.0000    0.0000 
-    H     0.0013    1.0265   -0.0000 
-    H     0.0013   -0.5133    0.8890 
-    H     0.0013   -0.5133   -0.8890 
-    F    -2.1959    0.0000   -0.0000 
-    F     1.8131    0.0000    0.0000 
-  periodic: no/energy.dat not found.
+  File "/users/snirenbe/stalk_pca/stalk/nexus/NexusPes.py", line 103, in evaluate_all
+    self._evaluate_structure(
+  File "/users/snirenbe/stalk_pca/stalk/nexus/NexusPes.py", line 149, in _evaluate_structure
+    jobs = self.func(
+           ^^^^^^^^^^
+  File "/users/snirenbe/stalk_pca/stalk/lsi/PathwayImage.py", line 128, in extended_pes_wrapper
+    return extended_pes(self.structure, subspace, pes, structure_sub_arg, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/users/snirenbe/stalk_pca/stalk/lsi/PathwayImage.py", line 403, in extended_pes
+    temp_structure_sub.set_params(params_sub)  # Set subspace params
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/users/snirenbe/stalk_pca/stalk/params/ParameterStructure.py", line 169, in set_params
+    pos_new, self.axes = self.map_backward()
+                         ^^^^^^^^^^^^^^^^^^^
+  File "/users/snirenbe/stalk_pca/stalk/params/ParameterStructure.py", line 199, in map_backward
+    res = self.backward_func(array(params), **self.backward_args)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/oscar/home/snirenbe/stalk_pca/examples/nexus/sn2_pca/params.py", line 69, in backward
+    x = p @ _components
+        ~~^~~~~~~~~~~~~
+ValueError: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature (n?,k),(k,m?)->(n?,m?) (size 4 is different from 3)
