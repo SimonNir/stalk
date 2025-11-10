@@ -481,6 +481,12 @@ useful keyword arguments:
                 else:
                     W_default = 1.0  # Arbitrary safe default
                 
+                # Ensure W_default doesn't exceed W_max
+                if hasattr(ls, 'W_max') and ls.W_max is not None:
+                    W_default = min(W_default, ls.W_max)
+                    if W_default < ls.W_max * 1e-3:  # If too small, use a reasonable fraction of W_max
+                        W_default = ls.W_max * 0.1
+                
                 # Default sigma: 5% of W
                 sigma_default = W_default * 0.05
                 

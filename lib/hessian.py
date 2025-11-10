@@ -107,9 +107,10 @@ class ParameterHessian():
         self.hessian_set = True
         
         # Cache originals for freezing
-        self._original_Lambda = self.Lambda.copy()
-        self._original_U = self.U.copy()
-        self._frozen_indices = set()  # Use set for faster lookups and uniqueness
+        # COMMENTED OUT: Freezing/masking functionality not working correctly, especially in subspaces
+        # self._original_Lambda = self.Lambda.copy()
+        # self._original_U = self.U.copy()
+        # self._frozen_indices = set()  # Use set for faster lookups and uniqueness
         #end def
 
     def get_directions(self, d = None):
@@ -287,58 +288,59 @@ class ParameterHessian():
         return dp_list, structure_list, label_list
     #end def
 
-    def freeze_direction(self, indices_to_freeze):
-        """
-        Removes specific directions from the Hessian eigensystem,
-        freezing them for optimization. Indices refer to the original eigensystem.
-
-        Args:
-            indices_to_freeze (int or list of int): Index(es) to freeze.
-        """
-        if not self.hessian_set:
-            raise RuntimeError("Hessian must be set before freezing directions.")
-        
-        if not isinstance(indices_to_freeze, list):
-            indices_to_freeze = [indices_to_freeze]
-        
-        invalid_indices = [idx for idx in indices_to_freeze if idx < 0 or idx >= len(self._original_Lambda)]
-        if invalid_indices:
-            raise IndexError(f"Invalid indices: {invalid_indices}. Original directions: {len(self._original_Lambda)}.")
-        
-        new_frozen = set(indices_to_freeze) - self._frozen_indices
-        if not new_frozen:
-            print("All specified directions are already frozen.")
-            return
-        
-        self._frozen_indices.update(new_frozen)
-        
-        # Sort frozen indices for deletion
-        frozen_list = sorted(self._frozen_indices)
-        
-        # Re-filter from originals
-        self.Lambda = np.delete(self._original_Lambda, frozen_list)
-        self.U = np.delete(self._original_U, frozen_list, axis=1)  # Columns are eigenvectors
-        
-        self.D = len(self.Lambda)
-        if self.D == 0:
-            raise ValueError("Cannot freeze all directions; at least one must remain active.")
-        
-        print(f"Froze direction(s) {sorted(new_frozen)}. Active directions now: {self.D}")
-
-    def unfreeze_all_directions(self):
-        """Restores the original eigensystem."""
-        if not self._frozen_indices:
-            print("No directions are frozen.")
-            return
-        
-        self.Lambda = self._original_Lambda.copy()
-        self.U = self._original_U.copy()
-        self.D = len(self.Lambda)
-        self._frozen_indices = set()
-        print("All directions unfrozen.")
-
-    def get_frozen_directions(self):
-        """Returns a sorted list of currently frozen indices."""
-        return sorted(self._frozen_indices)
+    # COMMENTED OUT: Freezing/masking functionality not working correctly, especially in subspaces
+    # def freeze_direction(self, indices_to_freeze):
+    #     """
+    #     Removes specific directions from the Hessian eigensystem,
+    #     freezing them for optimization. Indices refer to the original eigensystem.
+    #
+    #     Args:
+    #         indices_to_freeze (int or list of int): Index(es) to freeze.
+    #     """
+    #     if not self.hessian_set:
+    #         raise RuntimeError("Hessian must be set before freezing directions.")
+    #     
+    #     if not isinstance(indices_to_freeze, list):
+    #         indices_to_freeze = [indices_to_freeze]
+    #     
+    #     invalid_indices = [idx for idx in indices_to_freeze if idx < 0 or idx >= len(self._original_Lambda)]
+    #     if invalid_indices:
+    #         raise IndexError(f"Invalid indices: {invalid_indices}. Original directions: {len(self._original_Lambda)}.")
+    #     
+    #     new_frozen = set(indices_to_freeze) - self._frozen_indices
+    #     if not new_frozen:
+    #         print("All specified directions are already frozen.")
+    #         return
+    #     
+    #     self._frozen_indices.update(new_frozen)
+    #     
+    #     # Sort frozen indices for deletion
+    #     frozen_list = sorted(self._frozen_indices)
+    #     
+    #     # Re-filter from originals
+    #     self.Lambda = np.delete(self._original_Lambda, frozen_list)
+    #     self.U = np.delete(self._original_U, frozen_list, axis=1)  # Columns are eigenvectors
+    #     
+    #     self.D = len(self.Lambda)
+    #     if self.D == 0:
+    #         raise ValueError("Cannot freeze all directions; at least one must remain active.")
+    #     
+    #     print(f"Froze direction(s) {sorted(new_frozen)}. Active directions now: {self.D}")
+    #
+    # def unfreeze_all_directions(self):
+    #     """Restores the original eigensystem."""
+    #     if not self._frozen_indices:
+    #         print("No directions are frozen.")
+    #         return
+    #     
+    #     self.Lambda = self._original_Lambda.copy()
+    #     self.U = self._original_U.copy()
+    #     self.D = len(self.Lambda)
+    #     self._frozen_indices = set()
+    #     print("All directions unfrozen.")
+    #
+    # def get_frozen_directions(self):
+    #     """Returns a sorted list of currently frozen indices."""
+    #     return sorted(self._frozen_indices)
 
 #end class
