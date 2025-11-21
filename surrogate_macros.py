@@ -14,7 +14,7 @@ __email__ = "tiihonen@iki.fi"
 __license__ = "BSD-3-Clause"
 
 
-default_steps = 10
+default_steps = 200
 
 # Minimal function for writing line-search structures
 def write_xyz_noise(structure, path, sigma, **kwargs):
@@ -737,39 +737,91 @@ def get_var_eff(
     analyzer_args = {},
     **kwargs
 ):
+    """
+    Run a test DMC job to calibrate var_eff (effective variance).
+    
+    This function runs a DMC calculation with sigma=None, which triggers the job function
+    to use default_steps (typically 10) for the number of DMC steps. The error bar (Err)
+    from this test calculation is then used to compute:
+        var_eff = default_steps * Err^2
+    
+    This var_eff is then used in subsequent DMC calculations to determine the optimal
+    number of steps based on the target uncertainty (sigma).
+    
+    Args:
+        structure: Structure to run test calculation on
+        job_func: Function that generates DMC jobs (should accept sigma=None)
+        path: Path for test calculation
+        analyzer_func: Function to analyze results and extract error bar
+        suffix: Suffix for DMC output file
+        equilibration: Number of blocks to discard for equilibration
+        analyzer_args: Additional arguments for analyzer function
+        **kwargs: Additional arguments passed to job_func
+    
+    Returns:
+        var_eff: Effective variance = default_steps * Err^2
+    """
     from nexus import run_project
     
-    # print(dir(job_func)) # will show what all the attributes of jobfunc are 
-    # print(job_func.sigma)
-    #POSSIBLE SOLUTION run_project(job_func(structure.copy(), path, sigma=job_func.sigma)
-    # the confusing part is why this is only happening now - possibly worth it to ask Juha
-    
-    #print("Attributes of job_func:", dir(job_func))  # Debugging statement - see python overloading troubleshooting.ipbny on simon PC - 
-    # SDN 9/10 this attempts to dir / get sigma partial and not the inner function; if you want the inner function sigma you need to find a diff way via partial.func or something
-    
-    #print("Job function sigma:", getattr(job_func, 'sigma', 'Attribute not found'))  # Debugging statement
-    
-    #if 'sigma' in kwargs: # second update 8/27/24 from SDN; sigma should only be being defined in job_func itself so shouldn't be in kwargs
-    #    del kwargs['sigma']
-    
-    run_project(job_func(structure.copy(), path, sigma = None)) #changed sigma=None to job_func.sigma to see if works 9/10/24 - 
-    # edit: it did not - perhaps because you aren't actually directly calling sigma but are acting on partial, not dmc_pes_job
-    E, Err = nexus_qmcpack_analyzer(path, suffix = suffix, equilibration = 10, **analyzer_args) # SDN 12-27-24 Could this be where it is breaking? 
-    var_eff = default_steps * Err**2 # in the updated STALK docs, they use a different class called EffectiveVariance
+    # Run test job with sigma=None to use default_steps for calibration
+    # The job function should detect sigma=None and pass it to dmc_steps to get default_steps
+    run_project(job_func(structure.copy(), path, sigma = None))
+    E, Err = analyzer_func(path, suffix = suffix, equilibration = equilibration, **analyzer_args)
+    var_eff = default_steps * Err**2  # Calibrate var_eff based on test job error bar
     return var_eff
 #end def
 
 
-def dmc_steps(sigma, var_eff = None, variance = 1.0, blocks = 200, walkers = 1000, kappa = 1.0):
+def dmc_steps(sigma, var_eff = None, variance = 1.0, blocks = 200, walkers = 1000, kappa = 1.0, 
+              min_sigma = 0.001, max_steps = 10000):
+    """
+    Compute DMC steps based on uncertainty (sigma) and effective variance.
+    
+    Args:
+        sigma: Uncertainty in energy prediction (typically from surrogate model)
+        var_eff: Effective variance (if None, uses variance/walkers/blocks formula)
+        variance: Variance estimate (used if var_eff is None)
+        blocks: Number of blocks
+        walkers: Number of walkers
+        kappa: Scaling factor (used if var_eff is None)
+        min_sigma: Minimum allowed sigma to prevent division by very small numbers.
+                   Very small sigma typically indicates soft modes that should be filtered.
+        max_steps: Maximum allowed steps to prevent excessive computation.
+    
+    Returns:
+        Number of DMC steps (int, at least 1)
+    """
     if sigma is None:
         return default_steps
     #end if
+    
+    # Apply minimum sigma threshold to prevent division by extremely small numbers
+    # This typically happens when soft modes aren't properly filtered from the hessian
+    original_sigma = sigma
+    if sigma < min_sigma:
+        print(f"WARNING: sigma={sigma:.6e} is below minimum threshold {min_sigma:.6e}. "
+              f"This may indicate unfiltered soft modes in the hessian. "
+              f"Using sigma={min_sigma:.6e} for step calculation.")
+        sigma = min_sigma
+    #end if
+    
     if var_eff is None:
         steps = kappa * variance / sigma**2 / walkers / blocks
     else:
         steps = var_eff / sigma**2
     #end if
-    return max(int(ceil(steps)), 1)
+    
+    steps_int = max(int(ceil(steps)), 1)
+    
+    # Warn if steps exceed maximum (indicates potential issue with sigma or var_eff)
+    if steps_int > max_steps:
+        print(f"WARNING: Computed DMC steps ({steps_int}) exceeds maximum threshold ({max_steps}). "
+              f"This suggests sigma ({original_sigma:.6e}) may be too small or var_eff too large. "
+              f"Consider checking hessian filtering. Capping at {max_steps} steps.")
+        steps_int = max_steps
+    #end if
+    
+    return steps_int
 #end def
 
 
