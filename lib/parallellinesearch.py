@@ -517,15 +517,129 @@ class ParallelLineSearch(PesSampler):
         #end for
     #end def
 
-    def updated_hessian(self, method = 'powell', **kwargs):
+    def updated_hessian(self, method = 'powell', alpha = 1.0, min_points = 5, max_curvature_ratio = 10.0, **kwargs):
+        """
+        Update Hessian using quasi-Newton methods.
+        
+        Parameters:
+        -----------
+        method : str
+            'powell' : Powell's symmetric Broyden update (uses forces/gradients)
+            'psb_curvature' : PSB-style update using curvature from 1D polynomial fits
+                - Recommended for noisy DMC data and saddle point optimization
+                - More stable than SR1, better conditioned updates
+                - Allows indefinite Hessians (unlike BFGS), so works for saddle points
+        alpha : float
+            Damping factor for curvature-based updates (0 < alpha <= 1.0)
+            Smaller values (e.g., 0.2) provide more stability under noise
+        min_points : int
+            Minimum number of data points required to trust the polynomial fit
+            Default: 5 (for cubic fits, need at least 4, so 5+ is safer)
+        max_curvature_ratio : float
+            Maximum allowed ratio |k_DMC / λ_old| before rejecting update as unreliable
+            Default: 10.0 (if curvature differs by >10x, likely noise artifact)
+        
+        Notes:
+        ------
+        For 'psb_curvature', we use the second derivative from polynomial fits of DMC energies.
+        This is reasonable because:
+        1. We already trust the polynomial fit to find the minimum (x0)
+        2. The curvature is a natural byproduct of the same fit
+        3. Quality checks (min_points, max_curvature_ratio) filter unreliable updates
+        4. Damping (alpha) accounts for remaining uncertainty
+        
+        However, second derivatives are more sensitive to noise than first derivatives.
+        The quality checks help ensure we only update when the fit is trustworthy.
+        """
         H = self.hessian.hessian
         U = self.hessian.U
+        Lambda = self.hessian.Lambda
+        
         if method == 'powell':
             d = matmul(U, array([[ls.x0 for ls in self.ls_list]]).T)
             y = matmul(U, array([[ls.get_force() for ls in self.ls_list]]).T)
             u = d * (d.T @ d)**-0.5
             j = y - H @ d
             dH = j @ u.T + u @ j.T - d.T @ j * u @ u.T
+        elif method == 'psb_curvature':
+            # PSB (Powell-Symmetric-Broyden) update using curvature from polynomial fits
+            # More stable than SR1 for noisy DMC data, allows indefinite Hessians (good for saddle points)
+            
+            dH = array([[0.0] * len(H)] * len(H))
+            updates_applied = 0
+            updates_skipped = 0
+            
+            for d, ls in enumerate(self.ls_list):
+                k_dmc = ls.get_hessian()  # Curvature from DMC polynomial fit
+                if k_dmc is None:
+                    updates_skipped += 1
+                    continue  # Skip if no fit available
+                #end if
+                
+                # Quality check 1: Do we have enough data points?
+                n_points = len(ls.grid) if hasattr(ls, 'grid') and ls.grid is not None else 0
+                if n_points < min_points:
+                    updates_skipped += 1
+                    continue  # Not enough points for reliable fit
+                #end if
+                
+                # Quality check 2: Is the minimum well within the sampling window?
+                # If x0 is at the boundary, the fit is extrapolating
+                x0 = ls.x0 if hasattr(ls, 'x0') and ls.x0 is not None else 0.0
+                if hasattr(ls, 'grid') and ls.grid is not None and len(ls.grid) > 0:
+                    grid_min, grid_max = ls.grid.min(), ls.grid.max()
+                    grid_span = grid_max - grid_min
+                    if grid_span > 1e-10:
+                        # Check if x0 is too close to boundary (within 10% of span)
+                        margin = 0.1 * grid_span
+                        if abs(x0 - grid_min) < margin or abs(x0 - grid_max) < margin:
+                            updates_skipped += 1
+                            continue  # Minimum at boundary, fit unreliable
+                        #end if
+                    #end if
+                #end if
+                
+                # Quality check 3: Is the curvature change reasonable?
+                lam_old = Lambda[d]
+                if abs(lam_old) > 1e-10:  # Avoid division by zero
+                    curvature_ratio = abs(k_dmc / lam_old)
+                    if curvature_ratio > max_curvature_ratio or curvature_ratio < 1.0 / max_curvature_ratio:
+                        updates_skipped += 1
+                        continue  # Curvature change too large, likely noise
+                    #end if
+                #end if
+                
+                # All quality checks passed - proceed with PSB update
+                v_d = U[:, d]  # Eigenvector (normalized)
+                s_d = x0 * v_d  # Step vector in parameter space
+                
+                if abs(x0) > 1e-10:  # Only update if we actually moved
+                    delta_k = alpha * (k_dmc - lam_old)
+                    y_minus_Hs = delta_k * v_d
+                    
+                    s_norm_sq = matmul(s_d.reshape(1, -1), s_d.reshape(-1, 1))[0, 0]
+                    if s_norm_sq > 1e-20:
+                        # PSB formula: H_new = H_old + ((y - H_old*s) * s^T + s * (y - H_old*s)^T) / (s^T * s)
+                        #              - ((y - H_old*s)^T * s) * s * s^T / (s^T * s)^2
+                        term1 = matmul(y_minus_Hs.reshape(-1, 1), s_d.reshape(1, -1))
+                        term2 = matmul(s_d.reshape(-1, 1), y_minus_Hs.reshape(1, -1))
+                        term3_num = matmul(y_minus_Hs.reshape(1, -1), s_d.reshape(-1, 1))[0, 0]
+                        term3 = term3_num * matmul(s_d.reshape(-1, 1), s_d.reshape(1, -1)) / (s_norm_sq ** 2)
+                        
+                        dH += (term1 + term2 - term3) / s_norm_sq
+                        updates_applied += 1
+                    #end if
+                #end if
+            #end for
+            
+            if updates_applied == 0 and updates_skipped > 0:
+                # All updates were skipped - this is worth warning about
+                print(f"Warning: All {updates_skipped} PSB curvature-based Hessian updates were skipped due to quality checks.")
+                print("  This may indicate noisy data or insufficient sampling. Consider:")
+                print("  - Increasing number of points per line search")
+                print("  - Reducing noise in DMC calculations")
+                print("  - Relaxing quality check thresholds (min_points, max_curvature_ratio)")
+            #end if
         else:
             print('Method {} not implemented'. format(method))
             dH = 0.0

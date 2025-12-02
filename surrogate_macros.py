@@ -14,7 +14,7 @@ __email__ = "tiihonen@iki.fi"
 __license__ = "BSD-3-Clause"
 
 
-default_steps = 200
+default_steps = 10
 
 # Minimal function for writing line-search structures
 def write_xyz_noise(structure, path, sigma, **kwargs):
@@ -772,8 +772,7 @@ def get_var_eff(
 #end def
 
 
-def dmc_steps(sigma, var_eff = None, variance = 1.0, blocks = 200, walkers = 1000, kappa = 1.0, 
-              min_sigma = 0.001, max_steps = 10000):
+def dmc_steps(sigma, var_eff = None, variance = 1.0, blocks = 200, walkers = 1000, kappa = 1.0):
     """
     Compute DMC steps based on uncertainty (sigma) and effective variance.
     
@@ -784,25 +783,12 @@ def dmc_steps(sigma, var_eff = None, variance = 1.0, blocks = 200, walkers = 100
         blocks: Number of blocks
         walkers: Number of walkers
         kappa: Scaling factor (used if var_eff is None)
-        min_sigma: Minimum allowed sigma to prevent division by very small numbers.
-                   Very small sigma typically indicates soft modes that should be filtered.
-        max_steps: Maximum allowed steps to prevent excessive computation.
     
     Returns:
         Number of DMC steps (int, at least 1)
     """
     if sigma is None:
         return default_steps
-    #end if
-    
-    # Apply minimum sigma threshold to prevent division by extremely small numbers
-    # This typically happens when soft modes aren't properly filtered from the hessian
-    original_sigma = sigma
-    if sigma < min_sigma:
-        print(f"WARNING: sigma={sigma:.6e} is below minimum threshold {min_sigma:.6e}. "
-              f"This may indicate unfiltered soft modes in the hessian. "
-              f"Using sigma={min_sigma:.6e} for step calculation.")
-        sigma = min_sigma
     #end if
     
     if var_eff is None:
@@ -812,14 +798,6 @@ def dmc_steps(sigma, var_eff = None, variance = 1.0, blocks = 200, walkers = 100
     #end if
     
     steps_int = max(int(ceil(steps)), 1)
-    
-    # Warn if steps exceed maximum (indicates potential issue with sigma or var_eff)
-    if steps_int > max_steps:
-        print(f"WARNING: Computed DMC steps ({steps_int}) exceeds maximum threshold ({max_steps}). "
-              f"This suggests sigma ({original_sigma:.6e}) may be too small or var_eff too large. "
-              f"Consider checking hessian filtering. Capping at {max_steps} steps.")
-        steps_int = max_steps
-    #end if
     
     return steps_int
 #end def
